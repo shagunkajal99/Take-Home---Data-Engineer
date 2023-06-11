@@ -1,0 +1,16 @@
+customer_id,first_name,last_name,email,phone
+1.0,John,Doe,johndoe@example.com,555-1234
+2.0,Jane,Smith,janesmith@example.com,555-5678
+3.0,David,Johnson,davidjohnson@example.com,555-9012
+4.0,Sarah,Williams,sarahwilliams@example.com,555-3456
+5.0,Michael,Brown,michaelbrown@example.com,555-7890
+6.0,Emily,Anderson,emilyanderson@example.com,555-2345
+7.0,William,Jones,williamjones@example.com,555-6789
+8.0,Sophia,Clark,sophiaclark@example.com,555-0123
+9.0,Liam,Taylor,NA,555-4567
+10.0,Olivia,Harris,oliviaharris@example.com,555-8901
+11.0,Noah,Davis,noahdavis@example.com,555-3456
+12.0,Ava,Thomas,avathomas@example.com,555-7890
+13.0,Ethan,Roberts,ethanroberts@example.com,555-1234
+14.0,Isabella,Wilson,isabellawilson@example.com,555-5678
+15.0,Mason,Miller,masonmiller@example.com,555-9012
