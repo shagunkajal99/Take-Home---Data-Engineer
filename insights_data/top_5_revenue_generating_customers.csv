@@ -1,0 +1,6 @@
+customer_id,first_name,last_name,email,phone,total_booking_value
+15,Mason,Miller,masonmiller@example.com,555-9012,4000
+8,Sophia,Clark,sophiaclark@example.com,555-0123,3300
+4,Sarah,Williams,sarahwilliams@example.com,555-3456,2700
+5,Michael,Brown,michaelbrown@example.com,555-7890,2400
+5,Michael,Brown,michaelbrown@example.com,555-7890,2400
