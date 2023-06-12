@@ -35,57 +35,69 @@ s3 = session.client('s3')
 # Specifying S3 bucket name
 bucket_name = "traveltestdata"
 
-# Method 1 - To read data from github
 def read_data_from_github(url):
-    response = requests.get(url, headers=headers)
-    csv_file = io.StringIO(response.text)
-    return pd.read_csv(csv_file)
+    try:
+        response = requests.get(url, headers=headers)
+        csv_file = io.StringIO(response.text)
+        return pd.read_csv(csv_file)
+    except Exception as e:
+        print("An error occurred while reading data from GitHub:", str(e))
+        return None
 
-# Method 2 - To upload data to postgreSQL
 def upload_to_postgresql(data, table_name):
-    data.to_sql(table_name, engine, if_exists='replace', index=False)
+    try:
+        data.to_sql(table_name, engine, if_exists='replace', index=False)
+    except Exception as e:
+        print(f"An error occurred while uploading data to PostgreSQL table '{table_name}':", str(e))
 
-# Method 3 - To upload data to S3
 def upload_to_s3(data, file_name):
-    csv_data = data.to_csv(index=False)
-    object_key = file_name
-    s3.put_object(Bucket=bucket_name, Key=object_key, Body=csv_data)
+    try:
+        csv_data = data.to_csv(index=False)
+        object_key = file_name
+        s3.put_object(Bucket=bucket_name, Key=object_key, Body=csv_data)
+    except Exception as e:
+        print(f"An error occurred while uploading data to S3 file '{file_name}':", str(e))
 
 try:
     # *Customer data*
     url = 'https://raw.githubusercontent.com/shagunkajal99/project101/master/customer_data.csv'
     customer_data = read_data_from_github(url)
-    customer_data.drop_duplicates(inplace=True)
-    customer_data.dropna(subset=["customer_id"], inplace=True)
-    customer_data["email"].fillna('NA', inplace=True)
+    if customer_data is not None:
+        customer_data.drop_duplicates(inplace=True)
+        customer_data.dropna(subset=["customer_id"], inplace=True)
+        customer_data["email"].fillna('NA', inplace=True)
 
-    with engine.begin() as connection:
-        connection.execute("ALTER TABLE booking_data DROP CONSTRAINT IF EXISTS fk_customer_id")
-    upload_to_postgresql(customer_data, "customer_data")
-    upload_to_s3(customer_data, 'customer_data.csv')
+        with engine.begin() as connection:
+            connection.execute("ALTER TABLE booking_data DROP CONSTRAINT IF EXISTS fk_customer_id")
+        upload_to_postgresql(customer_data, "customer_data")
+        upload_to_s3(customer_data, 'customer_data.csv')
 
     # *Destination Data*
     url = 'https://raw.githubusercontent.com/shagunkajal99/project101/master/destination_data.csv'
     destination_data = read_data_from_github(url)
-    destination_data.drop_duplicates(inplace=True)
-    upload_to_postgresql(destination_data, "destination_data")
-    upload_to_s3(destination_data, 'destination_data.csv')
+    if destination_data is not None:
+        destination_data.drop_duplicates(inplace=True)
+        upload_to_postgresql(destination_data, "destination_data")
+        upload_to_s3(destination_data, 'destination_data.csv')
 
     # *Booking Data*
     url = 'https://raw.githubusercontent.com/shagunkajal99/project101/master/booking_data.csv'
     booking_data = read_data_from_github(url)
-    booking_data.drop_duplicates(subset=["booking_id"], inplace=True)
-    booking_data.dropna(subset=['booking_id', 'customer_id'], inplace=True)
-    booking_data["destination"].fillna('NA', inplace=True)
-    booking_data["total_booking_value"] = booking_data["number_of_passengers"] * booking_data["cost_per_passenger"]
-    upload_to_postgresql(booking_data, "booking_data")
-    upload_to_s3(booking_data, 'booking_data.csv')
+    if booking_data is not None:
+        booking_data.drop_duplicates(subset=["booking_id"], inplace=True)
+        booking_data.dropna(subset=['booking_id', 'customer_id'], inplace=True)
+        booking_data["destination"].fillna('NA', inplace=True)
+        booking_data["total_booking_value"] = booking_data["number_of_passengers"] * booking_data["cost_per_passenger"]
 
-    # Adding primary key and foreign key constraints in the postgreSQL tables
+        upload_to_postgresql(booking_data, "booking_data")
+        upload_to_s3(booking_data, 'booking_data.csv')
+
+    # Adding primary key and foreign key constraints in the PostgreSQL tables
     with engine.begin() as connection:
         connection.execute("ALTER TABLE customer_data ADD PRIMARY KEY (customer_id)")
         connection.execute("ALTER TABLE destination_data ADD PRIMARY KEY (destination_id)")
-        connection.execute("ALTER TABLE booking_data ADD PRIMARY KEY (booking_id)")
+        connection.execute(
+            "ALTER TABLE booking_data ADD PRIMARY KEY (booking_id)")
         connection.execute(
             "ALTER TABLE booking_data ADD CONSTRAINT fk_customer_id FOREIGN KEY (customer_id) REFERENCES customer_data (customer_id)")
 
