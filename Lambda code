@@ -42,7 +42,7 @@ def calculate_top_3_mostly_chosen_countries(customer_data, destination_data, boo
     except Exception as e:
         raise Exception(f"Failed to calculate top 3 mostly chosen countries: {e}")
 
-# Method 4 - TO CALCULATE Top 5 revenue generating customers
+# Method 5 - TO CALCULATE Top 5 revenue generating customers
 def calculate_top_5_revenue_generating_customers(customer_data, destination_data, booking_data):
     try:
         joined_df = booking_data.merge(customer_data, on='customer_id', how='left')
