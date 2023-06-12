@@ -1,4 +1,3 @@
-# Importing necessary libraries
 import pandas as pd
 import requests
 import io
@@ -6,8 +5,6 @@ import json
 from sqlalchemy import create_engine
 import csv
 import boto3
-
-
 
 # GITHUB CONNECT
 credentials_file_path = r"C:\Users\Shagun Kajal\Downloads\creds.json"
@@ -18,13 +15,9 @@ headers = {
     'Authorization': f'Bearer {auth_token}'
 }
 
-
-
 # POSTGRESQL CONNECT
 db_url = 'postgresql://postgres:root@localhost:5432/travelDB'
 engine = create_engine(db_url)
-
-
 
 # AWS S3 CONNECT
 csv_file_path = r"C:\Users\Shagun Kajal\Downloads\Jupyter_notebook_user_accessKeys.csv"
@@ -37,99 +30,65 @@ session = boto3.Session(
     aws_access_key_id=access_key_id,
     aws_secret_access_key=secret_access_key
 )
-s3 = session.client('s3')        
+s3 = session.client('s3')
 
 # Specifying S3 bucket name
 bucket_name = "traveltestdata"
 
-
-
-# *Customer data*
-
-def customer_data_upload():
-    # READING DATA
-    url = 'https://raw.githubusercontent.com/shagunkajal99/project101/master/customer_data.csv'
+# Method 1 - To read data from github
+def read_data_from_github(url):
     response = requests.get(url, headers=headers)
     csv_file = io.StringIO(response.text)
-    customer_data = pd.read_csv(csv_file)
-    
-    # TRANSFORMING DATA
+    return pd.read_csv(csv_file)
+
+# Method 2 - To upload data to postgreSQL
+def upload_to_postgresql(data, table_name):
+    data.to_sql(table_name, engine, if_exists='replace', index=False)
+
+# Method 3 - To upload data to S3
+def upload_to_s3(data, file_name):
+    csv_data = data.to_csv(index=False)
+    object_key = file_name
+    s3.put_object(Bucket=bucket_name, Key=object_key, Body=csv_data)
+
+try:
+    # *Customer data*
+    url = 'https://raw.githubusercontent.com/shagunkajal99/project101/master/customer_data.csv'
+    customer_data = read_data_from_github(url)
     customer_data.drop_duplicates(inplace=True)
-    customer_data.dropna(subset=["customer_id"],inplace=True)
-    customer_data["email"].fillna('NA',inplace=True)
-    
-    # UPLOADING DATA
-    # TO POSTGRESQL
-    # Dropping foreign key constraint
+    customer_data.dropna(subset=["customer_id"], inplace=True)
+    customer_data["email"].fillna('NA', inplace=True)
+
     with engine.begin() as connection:
         connection.execute("ALTER TABLE booking_data DROP CONSTRAINT IF EXISTS fk_customer_id")
-    customer_data.to_sql("customer_data", engine, if_exists='replace', index=False)
-    # TO S3
-    customer_data_csv = customer_data.to_csv(index=False)
-    object_key = 'customer_data.csv'
-    s3.put_object(Bucket=bucket_name, Key=object_key, Body=customer_data_csv)
+    upload_to_postgresql(customer_data, "customer_data")
+    upload_to_s3(customer_data, 'customer_data.csv')
 
-    
-
-# *Destination Data*
-
-def destination_data_upload():
-    # READING DATA 
+    # *Destination Data*
     url = 'https://raw.githubusercontent.com/shagunkajal99/project101/master/destination_data.csv'
-    response = requests.get(url, headers=headers)
-    csv_file = io.StringIO(response.text)
-    destination_data = pd.read_csv(csv_file)
-    
-    # TRANSFORMING DATA
+    destination_data = read_data_from_github(url)
     destination_data.drop_duplicates(inplace=True)
-    
-    # UPLOADING DATA
-    # TO POSTGRESQL
-    destination_data.to_sql("destination_data", engine, if_exists='replace', index=False)
-    # TO S3
-    destination_data_csv = destination_data.to_csv(index=False)
-    object_key = 'destination_data.csv'
-    s3.put_object(Bucket=bucket_name, Key=object_key, Body=destination_data_csv)
-    
-    
+    upload_to_postgresql(destination_data, "destination_data")
+    upload_to_s3(destination_data, 'destination_data.csv')
 
-# *Booking Data*
-
-def booking_data_upload():
-    # READING DATA
+    # *Booking Data*
     url = 'https://raw.githubusercontent.com/shagunkajal99/project101/master/booking_data.csv'
-    response = requests.get(url, headers=headers)
-    csv_file = io.StringIO(response.text)
-    booking_data = pd.read_csv(csv_file)
-    
-    # TRANSFORMING DATA
-    booking_data.drop_duplicates(subset=["booking_id"],inplace=True)
-    booking_data.dropna(subset=['booking_id','customer_id'],inplace=True)
-    booking_data["destination"].fillna('NA',inplace=True)
-    booking_data["total_booking_value"]=booking_data["number_of_passengers"]*booking_data["cost_per_passenger"]
-    
-    # UPLOAD DATA
-    # TO POSTGRESQL
-    booking_data.to_sql("booking_data", engine, if_exists='replace', index=False)
-    # TO S3
-    booking_data_csv = booking_data.to_csv(index=False)
-    object_key = 'booking_data.csv'
-    s3.put_object(Bucket=bucket_name, Key=object_key, Body=booking_data_csv)
+    booking_data = read_data_from_github(url)
+    booking_data.drop_duplicates(subset=["booking_id"], inplace=True)
+    booking_data.dropna(subset=['booking_id', 'customer_id'], inplace=True)
+    booking_data["destination"].fillna('NA', inplace=True)
+    booking_data["total_booking_value"] = booking_data["number_of_passengers"] * booking_data["cost_per_passenger"]
+    upload_to_postgresql(booking_data, "booking_data")
+    upload_to_s3(booking_data, 'booking_data.csv')
 
+    # Adding primary key and foreign key constraints in the postgreSQL tables
+    with engine.begin() as connection:
+        connection.execute("ALTER TABLE customer_data ADD PRIMARY KEY (customer_id)")
+        connection.execute("ALTER TABLE destination_data ADD PRIMARY KEY (destination_id)")
+        connection.execute("ALTER TABLE booking_data ADD PRIMARY KEY (booking_id)")
+        connection.execute(
+            "ALTER TABLE booking_data ADD CONSTRAINT fk_customer_id FOREIGN KEY (customer_id) REFERENCES customer_data (customer_id)")
 
-
-# Calling the methods to upload data    
-customer_data_upload()
-destination_data_upload()
-booking_data_upload()
-
-
-# Adding primary key and foreign key constraints in the postgreSQL tables
-with engine.begin() as connection:
-    connection.execute("ALTER TABLE customer_data ADD PRIMARY KEY (customer_id)")
-    connection.execute("ALTER TABLE destination_data ADD PRIMARY KEY (destination_id)")
-    connection.execute("ALTER TABLE booking_data ADD PRIMARY KEY (booking_id)")
-    connection.execute("ALTER TABLE booking_data ADD CONSTRAINT fk_customer_id FOREIGN KEY (customer_id) REFERENCES customer_data (customer_id)")
-
-                    
-    
+    print("Data upload completed successfully.")
+except Exception as e:
+    print("An error occurred during data upload:", str(e))
