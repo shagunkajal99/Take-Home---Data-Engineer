@@ -2,44 +2,81 @@ import pandas as pd
 import json
 import boto3
 
-def read_csv_from_s3(file_path):
-    s3 = boto3.client('s3')
-    obj = s3.get_object(Bucket='traveltestdata', Key=file_path)
-    data = pd.read_csv(obj['Body'])
-    return data
+# Method 1 - Read data
+def read_csv_from_s3(bucket_name, file_path):
+    try:
+        s3 = boto3.client('s3')
+        obj = s3.get_object(Bucket=bucket_name, Key=file_path)
+        data = pd.read_csv(obj['Body'])
+        return data
+    except Exception as e:
+        raise Exception(f"Failed to read CSV from S3: {e}")
 
-def write_csv_to_s3(dataframe, file_path):
-    s3 = boto3.client('s3')
-    csv_data = dataframe.to_csv(index=False)
-    s3.put_object(Body=csv_data, Bucket='traveltestresult', Key=file_path)
+# Method 2 - Write Data
+def write_csv_to_s3(bucket_name, dataframe, file_path):
+    try:
+        s3 = boto3.client('s3')
+        csv_data = dataframe.to_csv(index=False)
+        s3.put_object(Body=csv_data, Bucket=bucket_name, Key=file_path)
+    except Exception as e:
+        raise Exception(f"Failed to write CSV to S3: {e}")
+
+
+# Method 3 - TO CALCULATE Total bookings per destination
+def calculate_total_bookings_per_destination(customer_data, destination_data, booking_data):
+    try:
+        result_df = booking_data.groupby("destination")["booking_id"].count().reset_index().rename(columns={"booking_id": "total_bookings"})
+        result_df["total_bookings"] = result_df["total_bookings"].astype(int)
+        return result_df
+    except Exception as e:
+        raise Exception(f"Failed to calculate total bookings per destination: {e}")
+
+# Method 4 - TO CALCULATE Top 3 mostly chosen countries        
+def calculate_top_3_mostly_chosen_countries(customer_data, destination_data, booking_data):
+    try:
+        joined_df = booking_data.merge(destination_data, on='destination', how='left')
+        result_df = joined_df.groupby('country')['booking_id'].count().reset_index().rename(columns={'booking_id': 'total_bookings'})
+        result_df['total_bookings'] = result_df['total_bookings'].astype(int)
+        selected_df = result_df.nlargest(3, 'total_bookings')
+        return selected_df
+    except Exception as e:
+        raise Exception(f"Failed to calculate top 3 mostly chosen countries: {e}")
+
+# Method 4 - TO CALCULATE Top 5 revenue generating customers
+def calculate_top_5_revenue_generating_customers(customer_data, destination_data, booking_data):
+    try:
+        joined_df = booking_data.merge(customer_data, on='customer_id', how='left')
+        result_df = joined_df.sort_values('total_booking_value', ascending=False).head(5)
+        result_df["booking_id"] = result_df["booking_id"].astype(int)
+        result_df["customer_id"] = result_df["customer_id"].astype(int)
+        selected_df = result_df[["customer_id", "first_name", "last_name", "email", "phone", "total_booking_value"]]
+        return selected_df
+    except Exception as e:
+        raise Exception(f"Failed to calculate top 5 revenue generating customers: {e}")
 
 def lambda_handler(event, context):
-    # Reading the data into dataframes
-    customer_data = read_csv_from_s3("customer_data.csv")
-    destination_data = read_csv_from_s3("destination_data.csv")
-    booking_data = read_csv_from_s3("booking_data.csv")
-    
-    # TO CALCULATE - Total bookings per destination
-    result_df = booking_data.groupby("destination")["booking_id"].count().reset_index().rename(columns={"booking_id": "total_bookings"})
-    result_df["total_bookings"] = result_df["total_bookings"].astype(int)
-    write_csv_to_s3(result_df, "total_bookings_per_destination.csv")
+    try:
+        # Reading the data into dataframes
+        customer_data = read_csv_from_s3("traveltestdata", "customer_data.csv")
+        destination_data = read_csv_from_s3("traveltestdata", "destination_data.csv")
+        booking_data = read_csv_from_s3("traveltestdata", "booking_data.csv")
 
-    # TO CALCULATE - Top 3 mostly chosen countries
-    joined_df = booking_data.merge(destination_data, on='destination', how='left')
-    result_df = joined_df.groupby('country')['booking_id'].count().reset_index().rename(columns={'booking_id': 'total_bookings'})
-    result_df['total_bookings'] = result_df['total_bookings'].astype(int)
-    selected_df = result_df.nlargest(3, 'total_bookings')
-    write_csv_to_s3(selected_df, "top_3_mostly_chosen_countries.csv")
+        # Calculating results
+        total_bookings_per_destination = calculate_total_bookings_per_destination(customer_data, destination_data, booking_data)
+        top_3_mostly_chosen_countries = calculate_top_3_mostly_chosen_countries(customer_data, destination_data, booking_data)
+        top_5_revenue_generating_customers = calculate_top_5_revenue_generating_customers(customer_data, destination_data, booking_data)
 
-    # TO CALCULATE - Top 5 revenue generating customers
-    joined_df = booking_data.merge(customer_data, on='customer_id', how='left')
-    result_df = joined_df.sort_values('total_booking_value', ascending=False).head(5)
-    result_df["booking_id"] = result_df["booking_id"].astype(int)
-    result_df["customer_id"] = result_df["customer_id"].astype(int)
-    selected_df = result_df[["customer_id", "first_name", "last_name", "email", "phone", "total_booking_value"]]
-    write_csv_to_s3(selected_df, "top_5_revenue_generating_customers.csv")
+        # Writing results to S3
+        write_csv_to_s3("traveltestresult", total_bookings_per_destination, "total_bookings_per_destination.csv")
+        write_csv_to_s3("traveltestresult", top_3_mostly_chosen_countries, "top_3_mostly_chosen_countries.csv")
+        write_csv_to_s3("traveltestresult", top_5_revenue_generating_customers, "top_5_revenue_generating_customers.csv")
 
-    return {
-        'statusCode': 200,
-        'body': json.dumps('Results updated!')
-    }
+        return {
+            'statusCode': 200,
+            'body': json.dumps('Results updated!')
+        }
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'body': json.dumps(f'Error: {str(e)}')
+        }
